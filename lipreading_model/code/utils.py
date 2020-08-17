@@ -16,7 +16,7 @@ import numpy as np
 import numpy.matlib as matlab
 import scipy.signal as signal
 import scipy.fftpack as fft
-from scipy.misc import imresize
+# from scipy.misc import imresize
 
 
 
@@ -84,7 +84,7 @@ def normalize_input(input, centralize=True, quantize=False):
             input[i] = rescale(item)
     return input
 
-def split_seq_data(X, y, subjects, video_lens, train_ids, val_ids, test_ids):
+def split_seq_data(X, y, subjects, video_lens, train_ids, val_ids, test_ids, delete_categories=[]):
     """
     Splits the data into training and testing sets
     :param X: input X
@@ -148,7 +148,74 @@ def split_seq_data(X, y, subjects, video_lens, train_ids, val_ids, test_ids):
             current_data_idx = end_data_idx
             subject_video_count = 1
             populate = False
+    if len(delete_categories) > 0:
+        # Delete some categories from training set and valid set
+        vid_idx = 0
+        vid_upper_buffer = train_vidlens[0]
+        data_idx = 0
+        frame_count = 0
+        idx = 0
+        train_delete_idx = np.empty((0,), dtype=int)
+        train_delete_vididx = np.empty((0,), dtype=int)
+        while idx < train_y.shape[0]:
+            if train_y[idx] not in delete_categories:
+                frame_count += 1
+                if frame_count >= vid_upper_buffer: # new video
+                    vid_idx += 1
+                    if vid_idx < train_vidlens.shape[0]:
+                        vid_upper_buffer += train_vidlens[vid_idx]
+                idx += 1
+                continue
+            else:
+                #print("deleted y: {}, pre: {}, aft: {}, idx:{} vid_idx:{}".format(train_y[idx:idx+train_vidlens[vid_idx]], train_y[idx-1], train_y[idx+train_vidlens[vid_idx]], idx, vid_idx))
+                train_delete_idx = np.concatenate((train_delete_idx, np.arange(idx, idx+train_vidlens[vid_idx])))
+                train_delete_vididx = np.append(train_delete_vididx, vid_idx)
+                idx += train_vidlens[vid_idx]
+                frame_count += train_vidlens[vid_idx]
+                vid_idx += 1
+                if vid_idx < train_vidlens.shape[0]:
+                    vid_upper_buffer += train_vidlens[vid_idx]
+        #print("total deleted items number:{}, target items number:{}, deleted videos:{}".format(train_delete_idx.shape[0], np.where(train_y>=8)[0].shape[0], train_delete_vididx.shape[0]))
+        train_X = np.delete(train_X, train_delete_idx, 0)
+        train_y = np.delete(train_y, train_delete_idx)
+        train_vidlens = np.delete(train_vidlens, train_delete_vididx)
+        train_subjects = np.delete(train_subjects, train_delete_vididx)
+
+        vid_idx = 0
+        vid_upper_buffer = val_vidlens[0]
+        data_idx = 0
+        frame_count = 0
+        idx = 0
+        val_delete_idx = np.empty((0,), dtype=int)
+        val_delete_vididx = np.empty((0,), dtype=int)
+        while idx < val_y.shape[0]:
+            if val_y[idx] not in delete_categories:
+                frame_count += 1
+                if frame_count >= vid_upper_buffer: # new video
+                    vid_idx += 1
+                    if vid_idx < val_vidlens.shape[0]:
+                        vid_upper_buffer += val_vidlens[vid_idx]
+                idx += 1
+                continue
+            else:
+                #print("deleted y: {}, pre: {}, aft: {}, idx:{} vid_idx:{}".format(val_y[idx:idx+val_vidlens[vid_idx]], val_y[idx-1], val_y[idx+val_vidlens[vid_idx]], idx, vid_idx))
+                val_delete_idx = np.concatenate((val_delete_idx, np.arange(idx, idx+val_vidlens[vid_idx])))
+                val_delete_vididx = np.append(val_delete_vididx, vid_idx)
+                idx += val_vidlens[vid_idx]
+                frame_count += val_vidlens[vid_idx]
+                vid_idx += 1
+                if vid_idx < val_vidlens.shape[0]:
+                    vid_upper_buffer += val_vidlens[vid_idx]
+        #print("total deleted items number:{}, target items number:{}, deleted videos:{}".format(val_delete_idx.shape[0], np.where(val_y>=8)[0].shape[0], val_delete_vididx.shape[0]))
+        val_X = np.delete(val_X, val_delete_idx, 0)
+        val_y = np.delete(val_y, val_delete_idx)
+        val_vidlens = np.delete(val_vidlens, val_delete_vididx)
+        val_subjects = np.delete(val_subjects, val_delete_vididx)
+
+
+
     return train_X, train_y, train_vidlens, train_subjects, \
            val_X, val_y, val_vidlens, val_subjects, \
            test_X, test_y, test_vidlens, test_subjects
+
 

@@ -3,7 +3,7 @@
 
 AUDIO_DATA_PATH = '/mnt/data/rajivratn/lipsync/data/audio'
 VIDEO_DATA_PATH = '/mnt/data/rajivratn/lipsync/data/v1/train'
-VIDEO_TEST_PATH = '/mnt/data/rajivratn/lipsync/data/v1/test'
+VIDEO_TEST_PATH = '/home/x/xiaochan/dataset/OuluVS2/data/v1/test'
 
 # AUDIO_DATA_PATH = '/Users/vipin/codes/lipSync/data/train/audio'
 # VIDEO_DATA_PATH = '/Users/vipin/codes/lipSync/data/train/video'

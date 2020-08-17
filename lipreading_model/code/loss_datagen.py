@@ -16,7 +16,7 @@ import numpy as np
 import numpy.matlib as matlab
 import scipy.signal as signal
 import scipy.fftpack as fft
-from scipy.misc import imresize
+# from scipy.misc import imresize
 
 
 

@@ -237,7 +237,7 @@ def main():
     learning_rate= 0.0003
 #     num_epoch= 40
     num_epoch=args.num_epoch
-    epochsize= 105*2 
+    epochsize= 105*2
     batchsize= 10
 
     #35*30=1050
@@ -248,6 +248,8 @@ def main():
     train_subject_ids = [1,2,3,5,7,10,11,12,14,16,17,18,19,20,21,23,24,25,27,28,31,32,33,35,36,37,39,40,41,42,45,46,47,48,53]
     val_subject_ids = [4,13,22,38,50]
     test_subject_ids = [6,8,9,15,26,30,34,43,44,49,51,52]
+
+    delete_categories = [10]
 
     pretrained_encoder_path=args.pretrained_encoder_path
     data_pickle_path=args.data_pickle_path
@@ -289,10 +291,12 @@ def main():
 
 
     print('constructing end to end model...\n')
-    pretrained_encoder_isTrue=True
 
-    #ae
-    pre_trained_encoder_variables = load_decoder(stream1, shape)
+    pretrained_encoder_isTrue=False
+    pre_trained_encoder_variables = 0
+
+    #pretrained_encoder_isTrue=True
+    #pre_trained_encoder_variables = load_decoder(stream1, shape)
 
     network=deltanet_majority_vote(device, pretrained_encoder_isTrue, \
                 pre_trained_encoder_variables, shape, nonlinearities, input_dimensions, windowsize, lstm_size, args.num_classes)
@@ -325,7 +329,7 @@ def main():
     train_X, train_y, train_vidlens, train_subjects, \
     val_X, val_y, val_vidlens, val_subjects, \
     test_X, test_y, test_vidlens, test_subjects =split_seq_data(data_matrix, targets_vec, subjects_vec, vidlen_vec,
-                                                                    train_subject_ids, val_subject_ids, test_subject_ids)
+                                                                    train_subject_ids, val_subject_ids, test_subject_ids, delete_categories=delete_categories)
 
     if matlab_target_offset:
         train_y -= 1
