@@ -147,6 +147,7 @@ def test(device, model,name,epoch, X_s1_val,X_s2_val, X_s3_val, X_s4_val, X_s5_v
     num_classes = output.shape[-1]
 
     ix = np.zeros((X_s1_val.shape[0],), dtype='int')
+    ix_top3 = np.zeros((X_s1_val.shape[0], 3), dtype='int')
     seq_lens = np.sum(mask_val, axis=-1)
 
 
@@ -160,20 +161,26 @@ def test(device, model,name,epoch, X_s1_val,X_s2_val, X_s3_val, X_s4_val, X_s5_v
             count = (predictions == cls).sum(axis=-1)
             votes[cls] = count
         ix[i] = np.argmax(votes)
+        ix_top3[i] = torch.topk(torch.from_numpy(votes),3)[1].numpy()
 
 
     c = ix == y_val
 #     print(c,ix[:10],y_val[:10])
     classification_rate = np.sum(c == True) / float(len(c))
 
+    c_top3 = np.zeros((X_s1_val.shape[0],), dtype='int')
+    for idx in range(X_s1_val.shape[0]):
+        if y_val[idx] in ix_top3[idx]:
+            c_top3[idx] = 1
+    classification_rate_top3 = np.sum(c_top3) / float(len(c_top3))
 
-    print('{} Epoch: {} \tAcc: {:.6f} \tLoss: {:.6f}'.format(name,
-                    epoch,classification_rate,loss.item() ))
+    print('{} Epoch: {} \tAcc: {:.6f} \tTOP3Acc: {:.6f} \tLoss: {:.6f}'.format(name,
+                    epoch,classification_rate,classification_rate_top3,loss.item() ))
 
     preds = ix
     true_labels = y_val
 
-    return classification_rate,loss.item(), preds, true_labels
+    return classification_rate,classification_rate_top3, loss.item(), preds, true_labels
 
 
 
@@ -277,6 +284,9 @@ def main():
     val_subject_ids = [4,13,22,38,50]
     test_subject_ids = [6,8,9,15,26,30,34,43,44,49,51,52]
 
+    #category number: 0 to 9
+    delete_categories = [9]
+
     model_1stream_path=args.model_1stream_path
     data_pickle_path=args.data_pickle_path
 
@@ -292,8 +302,9 @@ def main():
     #                                                  windowsize, lstm_size, model_1stream_path, args.num_classes)
     # imagesize5, input_dimensions5, s5_data,s5_pretrained_model= get_data(device, view5, shape, nonlinearities,
     #                                                  windowsize, lstm_size, model_1stream_path, args.num_classes)
+
     # On .pkl file
-    print( model_1stream_path)
+    print(model_1stream_path)
     imagesize1, input_dimensions1, s1_data,s1_pretrained_model= get_data_from_file_path(device, view1 ,shape, nonlinearities, windowsize, lstm_size, data_pickle_path, model_1stream_path, 10)
     imagesize2, input_dimensions2, s2_data,s2_pretrained_model= get_data_from_file_path(device, view2, shape, nonlinearities,
                                                     windowsize, lstm_size, data_pickle_path, model_1stream_path, args.num_classes)
@@ -342,10 +353,10 @@ def main():
     meanremove= True
     samplewisenormalize= True
 
+
     #convert to 0 order
     if matlab_target_offset:
         targets_vec -= 1
-
 
     if meanremove:
         s1_data_matrix = sequencewise_mean_image_subtraction(s1_data_matrix, vidlen_vec)
@@ -366,31 +377,32 @@ def main():
     s1_val_X, s1_val_y, s1_val_vidlens, s1_val_subjects, \
     s1_test_X, s1_test_y, s1_test_vidlens, s1_test_subjects = split_seq_data(s1_data_matrix, targets_vec, subjects_vec,
                                                                             vidlen_vec, train_subject_ids,
-                                                                            val_subject_ids, test_subject_ids)
+                                                                            val_subject_ids, test_subject_ids,delete_categories=delete_categories)
 
     s2_train_X, s2_train_y, s2_train_vidlens, s2_train_subjects, \
     s2_val_X, s2_val_y, s2_val_vidlens, s2_val_subjects, \
     s2_test_X, s2_test_y, s2_test_vidlens, s2_test_subjects = split_seq_data(s2_data_matrix, targets_vec, subjects_vec,
                                                                             vidlen_vec, train_subject_ids,
-                                                                            val_subject_ids, test_subject_ids)
+                                                                            val_subject_ids, test_subject_ids,delete_categories=delete_categories)
 
     s3_train_X, s3_train_y, s3_train_vidlens, s3_train_subjects, \
     s3_val_X, s3_val_y, s3_val_vidlens, s3_val_subjects, \
     s3_test_X, s3_test_y, s3_test_vidlens, s3_test_subjects = split_seq_data(s3_data_matrix, targets_vec, subjects_vec,
                                                                             vidlen_vec, train_subject_ids,
-                                                                            val_subject_ids, test_subject_ids)
+                                                                            val_subject_ids, test_subject_ids,delete_categories=delete_categories)
 
     s4_train_X, s4_train_y, s4_train_vidlens, s4_train_subjects, \
     s4_val_X, s4_val_y, s4_val_vidlens, s4_val_subjects, \
     s4_test_X, s4_test_y, s4_test_vidlens, s4_test_subjects = split_seq_data(s4_data_matrix, targets_vec, subjects_vec,
                                                                             vidlen_vec, train_subject_ids,
-                                                                            val_subject_ids, test_subject_ids)
+                                                                            val_subject_ids, test_subject_ids,delete_categories=delete_categories)
 
     s5_train_X, s5_train_y, s5_train_vidlens, s5_train_subjects, \
     s5_val_X, s5_val_y, s5_val_vidlens, s5_val_subjects, \
     s5_test_X, s5_test_y, s5_test_vidlens, s5_test_subjects = split_seq_data(s5_data_matrix, targets_vec, subjects_vec,
                                                                             vidlen_vec, train_subject_ids,
-                                                                            val_subject_ids, test_subject_ids)
+                                                                            val_subject_ids, test_subject_ids,delete_categories=delete_categories)
+
 
 
     datagen = gen_lstm_batch_random(s1_train_X, s1_train_y, s1_train_vidlens, batchsize=batchsize)
@@ -452,11 +464,11 @@ def main():
         train_acc, train_loss,  predictions_train, true_label_train=(0,0,0,0)
 
         #(device, model,name,epoch, X_s1_val,X_s2_val, X_s3_val, X_s4_val, X_s5_val, y_val, vid_lens_batch, mask_val, idxs_val)
-        val_acc, val_loss, predictions_val, true_label_val = test(device, model,"val",epoch, \
+        val_acc, val_acc_top3, val_loss, predictions_val, true_label_val = test(device, model,"val",epoch, \
                                     X_s1_val,X_s2_val, X_s3_val, X_s4_val, X_s5_val,\
                                                                 y_val, vid_lens_batch_val, mask_val, idxs_val)
 
-        test_acc, test_loss, predictions_test, true_label_test = test(device, model,"test",epoch, \
+        test_acc, test_acc_top3, test_loss, predictions_test, true_label_test = test(device, model,"test",epoch, \
                                 X_s1_test,X_s2_test, X_s3_test, X_s4_test, X_s5_test,\
                                                                 y_test, vid_lens_batch_test, mask_test, idxs_test)
 
@@ -470,6 +482,7 @@ def main():
 
                 'test_loss':             test_loss,
                 'test_accuracy':         test_acc,
+                'test_accuracy_top3':    test_acc_top3,
                 'test_predictions':      predictions_test,
                 'test_true_label':       true_label_test,
 
@@ -480,6 +493,7 @@ def main():
 
                 'val_loss': val_loss,
                 'val_accuracy': val_acc,
+                'val_accuracy_top3':    val_acc_top3,
                 'val_predictions':      predictions_val,
                 'val_true_label':       true_label_val,
 

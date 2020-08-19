@@ -50,7 +50,7 @@ def temporal_ce_loss(output, target, mask):
     output=torch.gather(output, 1, y)* mask
 
     # compute cross entropy loss which ignores all elem where mask =0
-    ce_loss = -torch.sum(output) / nb_frames
+    ce_loss = -torch.sum(output[:,0]) / nb_frames
 
     return ce_loss
 

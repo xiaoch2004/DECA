@@ -265,6 +265,8 @@ def main():
     val_subject_ids = [4,13,22,38,50]
     test_subject_ids = [6,8,9,15,26,30,34,43,44,49,51,52]
 
+    delete_categories = [10]
+
     model_1stream_path=args.model_1stream_path
     data_pickle_path=args.data_pickle_path
 
