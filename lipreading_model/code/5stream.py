@@ -305,15 +305,15 @@ def main():
 
     # On .pkl file
     print(model_1stream_path)
-    imagesize1, input_dimensions1, s1_data,s1_pretrained_model= get_data_from_file_path(device, view1 ,shape, nonlinearities, windowsize, lstm_size, data_pickle_path, model_1stream_path, 10)
+    imagesize1, input_dimensions1, s1_data,s1_pretrained_model= get_data_from_file_path(device, view1 ,shape, nonlinearities, windowsize, lstm_size, data_pickle_path, model_1stream_path, 10, img_resize=[44,50])
     imagesize2, input_dimensions2, s2_data,s2_pretrained_model= get_data_from_file_path(device, view2, shape, nonlinearities,
-                                                    windowsize, lstm_size, data_pickle_path, model_1stream_path, args.num_classes)
+                                                    windowsize, lstm_size, data_pickle_path, model_1stream_path, args.num_classes, img_resize=[44,50])
     imagesize3, input_dimensions3, s3_data,s3_pretrained_model= get_data_from_file_path(device, view3, shape, nonlinearities,
-                                                    windowsize, lstm_size, data_pickle_path, model_1stream_path, args.num_classes)
+                                                    windowsize, lstm_size, data_pickle_path, model_1stream_path, args.num_classes, img_resize=[44,50])
     imagesize4, input_dimensions4, s4_data,s4_pretrained_model= get_data_from_file_path(device, view4, shape, nonlinearities,
-                                                    windowsize, lstm_size, data_pickle_path, model_1stream_path, args.num_classes)
+                                                    windowsize, lstm_size, data_pickle_path, model_1stream_path, args.num_classes, img_resize=[44,50])
     imagesize5, input_dimensions5, s5_data,s5_pretrained_model= get_data_from_file_path(device, view5, shape, nonlinearities,
-                                                    windowsize, lstm_size, data_pickle_path, model_1stream_path, args.num_classes)
+                                                    windowsize, lstm_size, data_pickle_path, model_1stream_path, args.num_classes, img_resize=[44,50])
 
     print('constructing end to end model...\n')
     pretrained_stream1_model_isTrue=True

@@ -249,7 +249,7 @@ def main():
     val_subject_ids = [4,13,22,38,50]
     test_subject_ids = [6,8,9,15,26,30,34,43,44,49,51,52]
 
-    delete_categories = [8,10]
+    delete_categories = [10]
 
     pretrained_encoder_path=args.pretrained_encoder_path
     data_pickle_path=args.data_pickle_path
@@ -297,6 +297,8 @@ def main():
 
     #pretrained_encoder_isTrue=True
     #pre_trained_encoder_variables = load_decoder(stream1, shape)
+
+    input_dimensions = 44*50
 
     network=deltanet_majority_vote(device, pretrained_encoder_isTrue, \
                 pre_trained_encoder_variables, shape, nonlinearities, input_dimensions, windowsize, lstm_size, args.num_classes)

@@ -62,7 +62,7 @@ def imresizemex(inimg, weights, indices, dim):
                 w = weights[i_w, :]
                 ind = indices[i_w, :]
                 im_slice = inimg[i_img, ind].astype(np.float64)
-                outimg[i_img, i_w] = np.sum(np.multiply(np.squeeze(im_slice, axis=0), w.T), axis=0)        
+                outimg[i_img, i_w] = np.sum(np.multiply(np.squeeze(im_slice, axis=0), w.T), axis=0)
     if inimg.dtype == np.uint8:
         outimg = np.clip(outimg, 0, 255)
         return np.around(outimg).astype(np.uint8)
@@ -112,7 +112,7 @@ def imresize(I, scalar_scale=None, output_shape=None, mode="vec"):
         w, ind = contributions(I.shape[k], output_size[k], scale[k], kernel, kernel_width)
         weights.append(w)
         indices.append(ind)
-    B = np.copy(I) 
+    B = np.copy(I)
     flag2D = False
     if B.ndim == 2:
         B = np.expand_dims(B, axis=2)
@@ -128,3 +128,20 @@ def convertDouble2Byte(I):
     B = np.clip(I, 0.0, 1.0)
     B = 255*B
     return np.around(B).astype(np.uint8)
+
+def padToSize(pic, size, pad_values=0):
+    '''
+    pic: 1-d grey image
+    (W, H): width and height of the target image
+    W and H should be larger than pic.shape[0] and pic.shape[1]
+    '''
+    H = size[0]
+    W = size[1]
+    pic_width = pic.shape[1]
+    pic_height = pic.shape[0]
+    left_pad = int(np.floor((W - pic_width)/2))
+    right_pad = W - left_pad - pic_width
+    upper_pad = int(np.floor((H - pic_height)/2))
+    bottom_pad = H - upper_pad - pic_height
+    pad_array = np.pad(pic, ((upper_pad, bottom_pad),(left_pad, right_pad)), mode="constant", constant_values=pad_values)
+    return pad_array

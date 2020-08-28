@@ -21,7 +21,7 @@ from utils import *
 from loss_datagen import *
 
 
-
+# This is the script training the multiview data with 1stream model. The image size has been padded to 44*50.
 
 def train(device, model, optimizer, datagen, epoch, epochsize):
 
@@ -121,6 +121,7 @@ def test(device, model,name,epoch, X_val, y_val, \
     num_classes = output.shape[-1]
 
     ix = np.zeros((X_val.shape[0],), dtype='int')
+    ix_top3 = np.zeros((X_s1_val.shape[0], 3), dtype='int')
     seq_lens = np.sum(mask_val, axis=-1)
 
 
@@ -134,20 +135,27 @@ def test(device, model,name,epoch, X_val, y_val, \
             count = (predictions == cls).sum(axis=-1)
             votes[cls] = count
         ix[i] = np.argmax(votes)
+        ix_top3[i] = torch.topk(torch.from_numpy(votes),3)[1].numpy()
 
 
     c = ix == y_val
 #     print(c,ix[:10],y_val[:10])
     classification_rate = np.sum(c == True) / float(len(c))
 
+    c_top3 = np.zeros((X_s1_val.shape[0],), dtype='int')
+    for idx in range(X_s1_val.shape[0]):
+        if y_val[idx] in ix_top3[idx]:
+            c_top3[idx] = 1
+    classification_rate_top3 = np.sum(c_top3) / float(len(c_top3))
+
 
     print('{} Epoch: {} \tAcc: {:.6f} \tLoss: {:.6f}'.format(name,
-                    epoch,classification_rate,loss.item() ))
+                    epoch,classification_rate_top3,classification_rate,loss.item() ))
 
     preds = ix
     true_labels = y_val
 
-    return classification_rate,loss.item(), preds, true_labels
+    return classification_rate, classification_rate_top3, loss.item(), preds, true_labels
 
 
 
@@ -187,7 +195,20 @@ def main():
     view =args.one_stream_view
     view=int(view)
 
-    save_path=args.save_path+"/view_"+str(view)
+    train_views = [1,2,3]
+    test_views = [4,5]
+    string = ""
+    for i in range(len(train_views)):
+        if i == 0:
+            string += str(train_views[i])
+        else:
+            string += (","+ str(train_views[i]))
+
+    if view == -1:
+        save_path=args.save_path+"/train_view_"+string
+    else:
+        save_path=args.save_path+"/train_view_"+str(view)
+
 
     if args.iteration:
         save_path+="_iteration_"+str(args.iteration)
@@ -249,7 +270,7 @@ def main():
     val_subject_ids = [4,13,22,38,50]
     test_subject_ids = [6,8,9,15,26,30,34,43,44,49,51,52]
 
-    delete_categories = [8,10]
+    delete_categories = []
 
     pretrained_encoder_path=args.pretrained_encoder_path
     data_pickle_path=args.data_pickle_path
@@ -288,6 +309,20 @@ def main():
         data = data_processed[view]
         stream1=pretrained_encoder_path + "/oulu_relu_ae_mean_removed20ep_trainData_profile.mat"
 
+    elif view==-1: # some views
+        imagesize = [44,50]
+        input_dimensions = 2200
+        train_data = {}
+        train_data['dataMatrix'] = np.concatenate(tuple([data_processed[i]['dataMatrix'] for i in train_views]))
+        train_data['targetsVec'] = np.concatenate(tuple([data_processed[i]['targetsVec'] for i in train_views]))
+        train_data['subjectsVec'] = np.concatenate(tuple([data_processed[i]['subjectsVec'] for i in train_views]))
+        train_data['videoLengthVec'] = np.concatenate(tuple([data_processed[i]['videoLengthVec'] for i in train_views]))
+
+        test_data = {}
+        test_data['dataMatrix'] = np.concatenate(tuple([data_processed[i]['dataMatrix'] for i in test_views]))
+        test_data['targetsVec'] = np.concatenate(tuple([data_processed[i]['targetsVec'] for i in test_views]))
+        test_data['subjectsVec'] = np.concatenate(tuple([data_processed[i]['subjectsVec'] for i in test_views]))
+        test_data['videoLengthVec'] = np.concatenate(tuple([data_processed[i]['videoLengthVec'] for i in test_views]))
 
 
     print('constructing end to end model...\n')
@@ -297,6 +332,8 @@ def main():
 
     #pretrained_encoder_isTrue=True
     #pre_trained_encoder_variables = load_decoder(stream1, shape)
+
+    input_dimensions = 44*50
 
     network=deltanet_majority_vote(device, pretrained_encoder_isTrue, \
                 pre_trained_encoder_variables, shape, nonlinearities, input_dimensions, windowsize, lstm_size, args.num_classes)
@@ -313,12 +350,18 @@ def main():
     print("\nModel on GPU",next(network.parameters()).is_cuda)
 
 
-    data_matrix = data['dataMatrix'].astype('float32')
-    targets_vec = data['targetsVec'].reshape((-1,))
-    subjects_vec = data['subjectsVec'].reshape((-1,))
-    vidlen_vec = data['videoLengthVec'].reshape((-1,))
+    train_data_matrix = train_data['dataMatrix'].astype('float32')
+    train_targets_vec = train_data['targetsVec'].reshape((-1,))
+    train_subjects_vec = train_data['subjectsVec'].reshape((-1,))
+    train_vidlen_vec = train_data['videoLengthVec'].reshape((-1,))
 
-    print("Shape of data_matrix of s1:",data_matrix.shape)
+    test_data_matrix = test_data['dataMatrix'].astype('float32')
+    test_targets_vec = test_data['targetsVec'].reshape((-1,))
+    test_subjects_vec = test_data['subjectsVec'].reshape((-1,))
+    test_vidlen_vec = test_data['videoLengthVec'].reshape((-1,))
+
+    print("Shape of train_data_matrix: ",train_data_matrix.shape)
+    print("Shape of test_data_matrix: ",test_data_matrix.shape)
 
 
     matlab_target_offset=True
@@ -327,9 +370,13 @@ def main():
 
     #convert to 0 order
     train_X, train_y, train_vidlens, train_subjects, \
-    val_X, val_y, val_vidlens, val_subjects, \
-    test_X, test_y, test_vidlens, test_subjects =split_seq_data(data_matrix, targets_vec, subjects_vec, vidlen_vec,
-                                                                    train_subject_ids, val_subject_ids, test_subject_ids, delete_categories=delete_categories)
+    val_X, val_y, val_vidlens, val_subjects ,_,_,_,_ \
+     = split_seq_data(train_data_matrix, train_targets_vec, train_subjects_vec, train_vidlen_vec, train_subject_ids, val_subject_ids, test_subject_ids, delete_categories=delete_categories)
+
+
+    _,_,_,_,_,_,_,_, \
+    test_X, test_y, test_vidlens, test_subjects =split_seq_data(test_data_matrix, test_targets_vec, test_subjects_vec, test_vidlen_vec, train_subject_ids, val_subject_ids, test_subject_ids, delete_categories=delete_categories)
+
 
     if matlab_target_offset:
         train_y -= 1
@@ -395,11 +442,11 @@ def main():
         train_acc, train_loss,  predictions_train, true_label_train=(0,0,0,0)
 
         #(device, model,name,epoch, X_val, y_val, vid_lens_batch, mask_val, idxs_val)
-        val_acc, val_loss, predictions_val, true_label_val = test(device, model,"val",epoch, \
+        val_acc, val_acc_top3, val_loss, predictions_val, true_label_val = test(device, model,"val",epoch, \
                                     X_val,\
                                                                 y_val, vid_lens_batch_val, mask_val, idxs_val)
 
-        test_acc, test_loss, predictions_test, true_label_test = test(device, model,"test",epoch, \
+        test_acc, test_acc_top3, test_loss, predictions_test, true_label_test = test(device, model,"test",epoch, \
                                 X_test,\
                                                                 y_test, vid_lens_batch_test, mask_test, idxs_test)
 
@@ -413,6 +460,7 @@ def main():
 
                 'test_loss':             test_loss,
                 'test_accuracy':         test_acc,
+                'test_accuracy_top3':    test_acc_top3,
                 'test_predictions':      predictions_test,
                 'test_true_label':       true_label_test,
 

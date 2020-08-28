@@ -45,10 +45,13 @@ def get_best_model(device, fpath, shapes, nonlinearities, input_size,window,
     return best_model,max_acc
 
 def get_data(device, view, shapes, nonlinearities,window,
-                                             hidden_units, model_1stream_path="../results/1stream",output_classes=10):
+                                             hidden_units, model_1stream_path="../results/1stream",output_classes=10, img_resize=0):
     if view==1:
         imagesize= [29,50]
         input_size= 1450
+        if img_resize != 0:
+            imagesize = img_resize
+            input_size = img_resize[0]*img_resize[1]
         data=sio.loadmat("../data/allMouthROIsResized_frontal.mat")
         pretrained_1stream_model,acc=get_best_model(device, model_1stream_path+"/view_1/models", shapes, nonlinearities, input_size,window,
                                              hidden_units,output_classes)
@@ -56,6 +59,9 @@ def get_data(device, view, shapes, nonlinearities,window,
     elif view==2:
         imagesize= [29,44]
         input_size= 1276
+        if img_resize != 0:
+            imagesize = img_resize
+            input_size = img_resize[0]*img_resize[1]
         data=sio.loadmat("../data/allMouthROIsResized_30.mat")
         pretrained_1stream_model,acc=get_best_model(device, model_1stream_path+"/view_2/models", shapes, nonlinearities, input_size,window,
                                              hidden_units,output_classes)
@@ -63,6 +69,9 @@ def get_data(device, view, shapes, nonlinearities,window,
     elif view==3:
         imagesize= [29,43]
         input_size= 1247
+        if img_resize != 0:
+            imagesize = img_resize
+            input_size = img_resize[0]*img_resize[1]
         data=sio.loadmat("../data/allMouthROIsResized_45.mat")
         pretrained_1stream_model,acc=get_best_model(device, model_1stream_path+"/view_3/models", shapes, nonlinearities, input_size,window,
                                              hidden_units,output_classes)
@@ -70,6 +79,9 @@ def get_data(device, view, shapes, nonlinearities,window,
     elif view==4:
         imagesize= [35,44]
         input_size= 1540
+        if img_resize != 0:
+            imagesize = img_resize
+            input_size = img_resize[0]*img_resize[1]
         data=sio.loadmat("../data/allMouthROIsResized_60.mat")
         pretrained_1stream_model,acc=get_best_model(device, model_1stream_path+"/view_4/models", shapes, nonlinearities, input_size,window,
                                              hidden_units,output_classes)
@@ -77,6 +89,9 @@ def get_data(device, view, shapes, nonlinearities,window,
     elif view==5:
         imagesize= [44,30]
         input_size= 1320
+        if img_resize != 0:
+            imagesize = img_resize
+            input_size = img_resize[0]*img_resize[1]
         data=sio.loadmat("../data/allMouthROIsResized_profile.mat")
         pretrained_1stream_model,acc=get_best_model(device, model_1stream_path+"/view_5/models", shapes, nonlinearities, input_size,window,
                                              hidden_units,output_classes)
@@ -87,7 +102,7 @@ def get_data(device, view, shapes, nonlinearities,window,
 
 def get_data_from_file_path(device, view, shapes, nonlinearities,window,
                                                             hidden_units,data_file_path="../data/oulu_processed.pkl",
-                                                                model_1stream_path="../results/1stream", output_classes=10):
+                                                                model_1stream_path="../results/1stream", output_classes=10, img_resize=0):
 
     with open(data_file_path, "rb") as myFile:
         data_processed= pickle.load(myFile)
@@ -95,6 +110,9 @@ def get_data_from_file_path(device, view, shapes, nonlinearities,window,
         if view==1:
             imagesize= [29,50]
             input_size= 1450
+            if img_resize != 0:
+                imagesize = img_resize
+                input_size = img_resize[0]*img_resize[1]
             data = data_processed[view]
             pretrained_1stream_model,acc=get_best_model(device, model_1stream_path+"/view_1_iteration_*/models", \
                                                 shapes, nonlinearities, input_size,window, \
@@ -102,6 +120,9 @@ def get_data_from_file_path(device, view, shapes, nonlinearities,window,
         elif view==2:
             imagesize= [29,44]
             input_size= 1276
+            if img_resize != 0:
+                imagesize = img_resize
+                input_size = img_resize[0]*img_resize[1]
             data = data_processed[view]
             pretrained_1stream_model,acc=get_best_model(device, model_1stream_path+"/view_2_iteration_*/models", \
                                                 shapes, nonlinearities, input_size,window, \
@@ -109,6 +130,9 @@ def get_data_from_file_path(device, view, shapes, nonlinearities,window,
         elif view==3:
             imagesize= [29,43]
             input_size= 1247
+            if img_resize != 0:
+                imagesize = img_resize
+                input_size = img_resize[0]*img_resize[1]
             data = data_processed[view]
             pretrained_1stream_model,acc=get_best_model(device, model_1stream_path+"/view_3_iteration_*/models", \
                                                 shapes, nonlinearities, input_size,window, \
@@ -116,6 +140,9 @@ def get_data_from_file_path(device, view, shapes, nonlinearities,window,
         elif view==4:
             imagesize= [35,44]
             input_size= 1540
+            if img_resize != 0:
+                imagesize = img_resize
+                input_size = img_resize[0]*img_resize[1]
             data = data_processed[view]
             pretrained_1stream_model,acc=get_best_model(device, model_1stream_path+"/view_4_iteration_*/models", \
                                                 shapes, nonlinearities, input_size,window, \
@@ -123,6 +150,9 @@ def get_data_from_file_path(device, view, shapes, nonlinearities,window,
         elif view==5:
             imagesize= [44,30]
             input_size= 1320
+            if img_resize != 0:
+                imagesize = img_resize
+                input_size = img_resize[0]*img_resize[1]
             data = data_processed[view]
             pretrained_1stream_model,acc=get_best_model(device, model_1stream_path+"/view_5_iteration_*/models", \
                                                 shapes, nonlinearities, input_size,window, \

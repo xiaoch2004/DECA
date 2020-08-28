@@ -38,11 +38,15 @@ parser.add_argument('--oulu_path', type=str, default="../data/cropped_mouth_mp4_
 
 parser.add_argument('--save_path', type=str, default='../data/oulu_processed.pkl', help=' path with filename for where and with what name you want to store the processed Oulu dataset')
 
+parser.add_argument('--resize_mode', type=str, default='orignal', help='original, stretch or pad')
+
+
 args = parser.parse_args()
 
 
 data_path=args.oulu_path
 save_path=args.save_path
+resize_mode=args.resize_mode
 
 a={}
 
@@ -50,7 +54,7 @@ print("Starting data processing...\n")
 for i in range(1,6):
     print("View:",i)
     a[i]={}
-    
+
     if i==1:
         targetH = 29
         targetW = 50
@@ -66,25 +70,26 @@ for i in range(1,6):
     elif i==5:
         targetH = 44
         targetW = 30
-        
+
     datamatrix_cell=[]
     targetsVec=[]
     subjectsVec=[]
     videoLengthVec=[]
     filename=[]
-        
+
+    saveFlag = True
+
     for j in range(1,54):
-        
+
         if j==29:
             continue
         videos=glob.glob(data_path+str(j)+"/"+str(i)+"/*")
         videos.sort()
         tcount=0
         for k in videos:
-            
             filename.append(k.split("/")[-1])
             subjectsVec.append(int(k.split("/")[-1].split("_")[0][1:]))
-            
+
             vidcap = cv2.VideoCapture(k)
             success,image = vidcap.read()
             count = 0
@@ -92,19 +97,30 @@ for i in range(1,6):
             while success:
                 img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
                 img_gray=img_gray.astype(float)
-                img_gray_resize=imresize.imresize(img_gray, output_shape=(targetH, targetW))
+                if resize_mode == "original":
+                    img_gray_resize=imresize.imresize(img_gray, output_shape=(targetH, targetW))
+                elif resize_mode == "pad":
+                    img_gray_resize=imresize.imresize(img_gray, output_shape=(targetH, targetW))
+                    img_gray_resize = imresize.padToSize(img_gray_resize, (44,50), pad_values=0)
+                elif resize_mode == "stretch":
+                    img_gray_resize=imresize.imresize(img_gray, output_shape=(44,50))
+                else:
+                    print("Unrecognized resize_mode setting")
+                    exit()
+                if saveFlag:
+                    cv2.imwrite(resize_mode+".png", img_gray_resize)
+                    saveFlag=False
+
                 gray_mat.append(img_gray_resize.flatten('F'))
                 targetsVec.append(get_target(int(k.split("/")[-1].split("_")[2].split(".")[0][1:])))
-                
-                
+
+
                 success,image = vidcap.read()
                 count += 1
-                
+
             datamatrix_cell.append(np.array(gray_mat))
             videoLengthVec.append(count)
             tcount+=count
-            
-        
 
     data_matrix=np.vstack(datamatrix_cell)
     a[i]["filename"]=filename
@@ -112,7 +128,7 @@ for i in range(1,6):
     a[i]["targetsVec"]=np.array(targetsVec)
     a[i]["subjectsVec"]=np.array(subjectsVec )
     a[i]["videoLengthVec"]=np.array(videoLengthVec)
-    
+
 # for testing
 # for i in range(1,6):
 #     print(len(a[i]["filename"]),a[i]["filename"][100:110])
@@ -125,4 +141,4 @@ for i in range(1,6):
 with open(save_path, "wb") as myFile:
     pickle.dump(a, myFile)
 
-    
+
