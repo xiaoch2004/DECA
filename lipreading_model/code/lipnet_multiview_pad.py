@@ -218,4 +218,4 @@ def main():
         val_X = normalize_input(val_X)
         test_X = normalize_input(test_X)
 
-    
+    train_X, train_y, train_vidlens, train_subjects = pad_frame_and_reshape(train_X, train_y, train_vidlens, train_subjects, [44,50])

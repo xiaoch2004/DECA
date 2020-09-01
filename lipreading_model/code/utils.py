@@ -233,13 +233,15 @@ def pad_frame_and_reshape(X, y, vidlens, subjects, size):
     max_length = np.max(vidlens)
     num_videos = len(vidlens)
     X_new = np.zeros((max_length*num_videos, X.shape[1]))
+    y_new = np.zeros(num_videos,)
     start_x = 0
     start_new = 0
-    for length in vidlens:
+    for idx, length in enumerate(vidlens):
         end_x = start_x + length
         end_new = start_new + max_length
         X_new[start_new:end_new] = pad_frames(X[start_x:end_x], max_length)
+        y_new[idx] = y[start_x]
         start_new = end_new
         start_x = end_x
-    return X_new.reshape(num_videos, max_length, size[0], size[1])
+    return X_new.reshape(num_videos, max_length, size[0], size[1]), y_new, vidlens, subjects
     
