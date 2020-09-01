@@ -212,10 +212,34 @@ def split_seq_data(X, y, subjects, video_lens, train_ids, val_ids, test_ids, del
         val_vidlens = np.delete(val_vidlens, val_delete_vididx)
         val_subjects = np.delete(val_subjects, val_delete_vididx)
 
-
-
     return train_X, train_y, train_vidlens, train_subjects, \
            val_X, val_y, val_vidlens, val_subjects, \
            test_X, test_y, test_vidlens, test_subjects
 
+def pad_frames(X, total_frames):
+    current_frame_num = X.shape[0]
+    if total_frames <= current_frame_num:
+        return X
+    else:     
+        pad_front_num = int(np.floor((total_frames - current_frame_num)/2 + 1))
+        pad_end_num = total_frames - current_frame_num - pad_front_num
+        X_new = np.zeros((total_frames ,X.shape[1]))
+        X_new[:pad_front_num] = np.tile(X[0], [pad_front_num,1])
+        X_new[pad_front_num:-pad_end_num] = X
+        X_new[-pad_end_num:] = np.tile(X[-1], [pad_end_num,1])
+        return X_new
 
+def pad_frame_and_reshape(X, y, vidlens, subjects, size):
+    max_length = np.max(vidlens)
+    num_videos = len(vidlens)
+    X_new = np.zeros((max_length*num_videos, X.shape[1]))
+    start_x = 0
+    start_new = 0
+    for length in vidlens:
+        end_x = start_x + length
+        end_new = start_new + max_length
+        X_new[start_new:end_new] = pad_frames(X[start_x:end_x], max_length)
+        start_new = end_new
+        start_x = end_x
+    return X_new.reshape(num_videos, max_length, size[0], size[1])
+    

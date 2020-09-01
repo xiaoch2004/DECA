@@ -338,6 +338,8 @@ def main():
     network=deltanet_majority_vote(device, pretrained_encoder_isTrue, \
                 pre_trained_encoder_variables, shape, nonlinearities, input_dimensions, windowsize, lstm_size, args.num_classes)
 
+    # network = LipNet(dropout_p=0.5)
+
 
     network.to(device)
 
