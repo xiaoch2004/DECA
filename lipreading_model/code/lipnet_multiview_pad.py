@@ -203,6 +203,8 @@ def main():
     _,_,_,_,_,_,_,_, \
     test_X, test_y, test_vidlens, test_subjects =split_seq_data(test_data_matrix, test_targets_vec, test_subjects_vec, test_vidlen_vec, train_subject_ids, val_subject_ids, test_subject_ids, delete_categories=delete_categories)
 
+    train_X, train_y, train_vidlens, train_subjects = pad_frame_and_reshape(train_X, train_y, train_vidlens, train_subjects, [44,50])
+
     if matlab_target_offset:
         train_y -= 1
         val_y -= 1
@@ -218,4 +220,6 @@ def main():
         val_X = normalize_input(val_X)
         test_X = normalize_input(test_X)
 
-    train_X, train_y, train_vidlens, train_subjects = pad_frame_and_reshape(train_X, train_y, train_vidlens, train_subjects, [44,50])
+
+if __name__ == "__main__":
+    main()
