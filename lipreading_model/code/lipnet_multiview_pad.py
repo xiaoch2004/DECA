@@ -14,150 +14,136 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+seed = 1
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+np.random.seed(seed)
+torch.backends.cudnn.deterministic = True
 
 from models import *
 from data_model_loader import *
 from utils import *
 from loss_datagen import *
 
-def dataset2dataloader(dataset, num_workers=opt.num_workers, shuffle=True):
-    return DataLoader(dataset,
-        batch_size = opt.batch_size, 
-        shuffle = shuffle,
-        num_workers = num_workers,
-        drop_last = False)
 
-def show_lr(optimizer):
-    lr = []
-    for param_group in optimizer.param_groups:
-        lr += [param_group['lr']]
-    return np.array(lr).mean()  
+def train(device, model, optimizer, datagen, epoch, epochsize):
+    model.train()
 
-def ctc_decode(y):
-    result = []
-    y = y.argmax(-1)
-    return [MyDataset.ctc_arr2txt(y[_], start=1) for _ in range(y.size(0))]
-    
-def test(model, net):
+    tloss=0
+    for i in range(epochsize):
+        X, y, m = next(datagen)
+        # repeat targets based on max sequence len
+        y = y.reshape((-1, 1))
+        y = y.repeat(m.shape[-1], axis=-1)
 
-    with torch.no_grad():
-        dataset = MyDataset(opt.video_path,
-            opt.anno_path,
-            opt.val_list,
-            opt.vid_padding,
-            opt.txt_padding,
-            'test')
-            
-        print('num_test_data:{}'.format(len(dataset.data)))  
-        
-        model.eval()
-        loader = dataset2dataloader(dataset, shuffle=False)
-        loss_list = []
-        wer = []
-        cer = []
-        crit = nn.CTCLoss()
-        tic = time.time()
-        for (i_iter, input) in enumerate(loader):            
-            vid = input.get('vid').cuda()
-            txt = input.get('txt').cuda()
-            vid_len = input.get('vid_len').cuda()
-            txt_len = input.get('txt_len').cuda()
-            
-            y = net(vid)
-            
-            loss = crit(y.transpose(0, 1).log_softmax(-1), txt, vid_len.view(-1), txt_len.view(-1)).detach().cpu().numpy()
-            loss_list.append(loss)
-            pred_txt = ctc_decode(y)
-            
-            truth_txt = [MyDataset.arr2txt(txt[_], start=1) for _ in range(txt.size(0))]
-            wer.extend(MyDataset.wer(pred_txt, truth_txt)) 
-            cer.extend(MyDataset.cer(pred_txt, truth_txt))              
-            if(i_iter % opt.display == 0):
-                v = 1.0*(time.time()-tic)/(i_iter+1)
-                eta = v * (len(loader)-i_iter) / 3600.0
-                
-                print(''.join(101*'-'))                
-                print('{:<50}|{:>50}'.format('predict', 'truth'))
-                print(''.join(101*'-'))                
-                for (predict, truth) in list(zip(pred_txt, truth_txt))[:10]:
-                    print('{:<50}|{:>50}'.format(predict, truth))                
-                print(''.join(101 *'-'))
-                print('test_iter={},eta={},wer={},cer={}'.format(i_iter,eta,np.array(wer).mean(),np.array(cer).mean()))                
-                print(''.join(101 *'-'))
-                
-        return (np.array(loss_list).mean(), np.array(wer).mean(), np.array(cer).mean())
-    
-def train(model, net):
-    
-    dataset = MyDataset(opt.video_path,
-        opt.anno_path,
-        opt.train_list,
-        opt.vid_padding,
-        opt.txt_padding,
-        'train')
-        
-    loader = dataset2dataloader(dataset) 
-    optimizer = optim.Adam(model.parameters(),
-                lr = opt.base_lr,
-                weight_decay = 0.,
-                amsgrad = True)
-                
-    print('num_train_data:{}'.format(len(dataset.data)))    
-    crit = nn.CTCLoss()
-    tic = time.time()
-    
-    train_wer = []
-    for epoch in range(opt.max_epoch):
-        for (i_iter, input) in enumerate(loader):
-            model.train()
-            vid = input.get('vid').cuda()
-            txt = input.get('txt').cuda()
-            vid_len = input.get('vid_len').cuda()
-            txt_len = input.get('txt_len').cuda()
-            
-            optimizer.zero_grad()
-            y = net(vid)
-            loss = crit(y.transpose(0, 1).log_softmax(-1), txt, vid_len.view(-1), txt_len.view(-1))
-            loss.backward()
-            if(opt.is_optimize):
-                optimizer.step()
-            
-            tot_iter = i_iter + epoch*len(loader)
-            
-            pred_txt = ctc_decode(y)
-            
-            truth_txt = [MyDataset.arr2txt(txt[_], start=1) for _ in range(txt.size(0))]
-            train_wer.extend(MyDataset.wer(pred_txt, truth_txt))
-            
-            if(tot_iter % opt.display == 0):
-                v = 1.0*(time.time()-tic)/(tot_iter+1)
-                eta = (len(loader)-i_iter)*v/3600.0
-                
-                writer.add_scalar('train loss', loss, tot_iter)
-                writer.add_scalar('train wer', np.array(train_wer).mean(), tot_iter)              
-                print(''.join(101*'-'))                
-                print('{:<50}|{:>50}'.format('predict', 'truth'))                
-                print(''.join(101*'-'))
-                
-                for (predict, truth) in list(zip(pred_txt, truth_txt))[:3]:
-                    print('{:<50}|{:>50}'.format(predict, truth))
-                print(''.join(101*'-'))                
-                print('epoch={},tot_iter={},eta={},loss={},train_wer={}'.format(epoch, tot_iter, eta, loss, np.array(train_wer).mean()))
-                print(''.join(101*'-'))
-                
-            if(tot_iter % opt.test_step == 0):                
-                (loss, wer, cer) = test(model, net)
-                print('i_iter={},lr={},loss={},wer={},cer={}'
-                    .format(tot_iter,show_lr(optimizer),loss,wer,cer))
-                writer.add_scalar('val loss', loss, tot_iter)                    
-                writer.add_scalar('wer', wer, tot_iter)
-                writer.add_scalar('cer', cer, tot_iter)
-                savename = '{}_loss_{}_wer_{}_cer_{}.pt'.format(opt.save_prefix, loss, wer, cer)
-                (path, name) = os.path.split(savename)
-                if(not os.path.exists(path)): os.makedirs(path)
-                torch.save(model.state_dict(), savename)
-                if(not opt.is_optimize):
-                    exit()
+        X = np.transpose(X[:,:,None,:,:], (0,2,1,3,4))
+        X=torch.from_numpy(X).float().to(device)
+        y=torch.from_numpy(y).long().to(device)
+        #vid_lens_batch=torch.from_numpy(vid_lens_batch).to(device)
+        m=torch.from_numpy(m).float().to(device)
+
+        optimizer.zero_grad()
+
+        #print(X.is_cuda)
+        #print(next(model.parameters()).is_cuda)
+        #print(X.shape,X_s2.shape)
+        #output,ordered_idx = model(X, vid_lens_batch)
+        output = model(X)
+
+
+        #target=torch.index_select(y,0,ordered_idx)
+        #m=torch.index_select(m,0,ordered_idx)
+
+        #loss = temporal_ce_loss(output, target,m)
+        loss = temporal_ce_loss(output, y, m)
+
+        tloss+=loss.item()
+
+        loss.backward()
+
+        #gradient clip, if needed add
+        nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+        optimizer.step()
+
+    print('Train Epoch: {} \tLoss: {:.6f}'.format(
+                    epoch, tloss*1.0/epochsize))
+
+
+def test(device, model,name,epoch, X_val, y_val, \
+         mask_val):
+    model.eval()
+
+    y_val = y_val.reshape((-1, 1))
+    y_val = y_val.repeat(mask_val.shape[-1], axis=-1)
+
+
+    X_val = np.transpose(X_val[:,:,None,:,:], (0,2,1,3,4))
+    X_val = torch.from_numpy(X_val).float().to(device)
+    y_val=torch.from_numpy(y_val).long().to(device)
+    # vid_lens_batch=torch.from_numpy(vid_lens_batch).to(device)
+    mask_val=torch.from_numpy(mask_val).to(device)
+
+    #output,ordered_idx = model(X, vid_lens_batch)
+    output = model(X_val)
+
+    #y_val=torch.index_select(y_val,0,ordered_idx)
+    #mask_val=torch.index_select(mask_val,0,ordered_idx)
+    #y=torch.from_numpy(y).long().to(device)
+    #target=torch.index_select(y,0,ordered_idx)
+
+
+    #m=mask_val.float()
+
+    loss = temporal_ce_loss(output, y_val, mask_val)
+
+    output=output.cpu().detach().numpy()
+
+    seq_len=output.shape[1]
+    y_val=y_val[:,0].contiguous()
+    mask_val=mask_val[:,:seq_len].contiguous()
+
+    mask_val=mask_val.cpu().numpy()
+    y_val=y_val.cpu().numpy()
+
+    num_classes = output.shape[-1]
+
+    ix = np.zeros((X_val.shape[0],), dtype='int')
+    ix_top3 = np.zeros((X_val.shape[0], 3), dtype='int')
+    seq_lens = np.sum(mask_val, axis=-1).astype(np.int)
+
+
+
+    # for each example, we only consider argmax of the seq len
+    votes = np.zeros((num_classes,), dtype='int')
+    for i, eg in enumerate(output):
+        predictions = np.argmax(eg[:seq_lens[i]], axis=-1)
+#         print(predictions.shape)
+        for cls in range(num_classes):
+            count = (predictions == cls).sum(axis=-1)
+            votes[cls] = count
+        ix[i] = np.argmax(votes)
+        ix_top3[i] = torch.topk(torch.from_numpy(votes),3)[1].numpy()
+
+
+    c = ix == y_val
+#     print(c,ix[:10],y_val[:10])
+    classification_rate = np.sum(c == True) / float(len(c))
+
+    c_top3 = np.zeros((X_val.shape[0],), dtype='int')
+    for idx in range(X_val.shape[0]):
+        if y_val[idx] in ix_top3[idx]:
+            c_top3[idx] = 1
+    classification_rate_top3 = np.sum(c_top3) / float(len(c_top3))
+
+
+    print('{} Epoch: {} \tTop3Acc: {:.6f} \tAcc: {:.6f} \tLoss: {:.6f}'.format(name,
+                    epoch,classification_rate_top3,classification_rate,loss.item() ))
+
+    preds = ix
+    true_labels = y_val
+
+    return classification_rate, classification_rate_top3, loss.item(), preds, true_labels
 
 def main():
 
@@ -185,6 +171,7 @@ def main():
 
     parser.add_argument('--num_epoch', type=int, default=20, help='no of epochs ')
     parser.add_argument('--num_classes', type=int, default=10, help='no of classes ')
+    parser.add_argument('--bigru_size', type=int, default=512, help='size of bi-GRU')
 
 
 
@@ -193,8 +180,8 @@ def main():
     view =args.one_stream_view
     view=int(view)
 
-    train_views = [1,2,3]
-    test_views = [4,5]
+    train_views = [1,2,3,4,5]
+    test_views = [1,2,3,4,5]
     string = ""
     for i in range(len(train_views)):
         if i == 0:
@@ -202,10 +189,7 @@ def main():
         else:
             string += (","+ str(train_views[i]))
 
-    if view == -1:
-        save_path=args.save_path+"/lipnet_train_views_"+string
-    else:
-        save_path=args.save_path+"/lipnet_train_views_"+str(view)
+    save_path=args.save_path+"/train_views_"+string
 
 
     if args.iteration:
@@ -252,11 +236,12 @@ def main():
     matlab_target_offset= True
 
     #[training]
-    learning_rate= 0.0003
+    learning_rate= 0.0001
 #     num_epoch= 40
     num_epoch=args.num_epoch
-    epochsize= 105*2
-    batchsize= 10
+    epochsize = 126
+    #batchsize = 150
+    batchsize = 10
 
     #35*30=1050
     #35*39=1365
@@ -298,11 +283,10 @@ def main():
 
     input_dimensions = 44*50
 
-    network=deltanet_majority_vote(device, pretrained_encoder_isTrue, \
-                pre_trained_encoder_variables, shape, nonlinearities, input_dimensions, windowsize, lstm_size, args.num_classes)
+    # network=deltanet_majority_vote(device, pretrained_encoder_isTrue, \
+    #            pre_trained_encoder_variables, shape, nonlinearities, input_dimensions, windowsize, lstm_size, args.num_classes)
 
-    # network = LipNet(dropout_p=0.5)
-
+    network = LipNet()
 
     network.to(device)
 
@@ -359,25 +343,98 @@ def main():
 
     train_X, train_y, train_vidlens, train_subjects = pad_frame_and_reshape(train_X, train_y, train_vidlens, train_subjects, [44,50])
 
-    print("Loading options...")
-    model = LipNet()
-    model = model.cuda()
-    net = nn.DataParallel(model).cuda()
+   
+    val_X, val_y, val_vidlens, val_subjects = pad_frame_and_reshape(val_X, val_y, val_vidlens, val_subjects, [44,50])
+    test_X, test_y, test_videns, test_subjects = pad_frame_and_reshape(test_X, test_y, test_vidlens, test_subjects, [44,50])
 
-    if(hasattr(opt, 'weights')):
-        pretrained_dict = torch.load(opt.weights)
-        model_dict = model.state_dict()
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict.keys() and v.size() == model_dict[k].size()}
-        missed_params = [k for k, v in model_dict.items() if not k in pretrained_dict.keys()]
-        print('loaded params/tot params:{}/{}'.format(len(pretrained_dict),len(model_dict)))
-        print('miss matched params:{}'.format(missed_params))
-        model_dict.update(pretrained_dict)
-        model.load_state_dict(model_dict)
-        
-    torch.manual_seed(opt.random_seed)
-    torch.cuda.manual_seed_all(opt.random_seed)
-    train(model, net)
+    print("Shape of training Dataset: ", train_X.shape)
+    print("Shape of validate Dataset: ", val_X.shape)
+    print("Shape of test Dataset: ", test_X.shape)
+
+
+    #datagen = gen_lstm_batch_random(train_X, train_y, train_vidlens, batchsize=batchsize)
+    datagen = gen_cnn_batch(train_X, train_y, batchsize=batchsize, shuffle=True)
+    test_datagen = gen_cnn_batch(test_X, test_y, batchsize=len(test_vidlens), shuffle=False)
+    val_datagen = gen_cnn_batch(val_X, val_y, batchsize=len(val_vidlens), shuffle=False)
+
+    X_val, y_val, mask_val = next(val_datagen)
+    X_test, y_test, mask_test = next(test_datagen)
+
+    loss_list_train=[]
+    loss_list_test=[]
+    loss_list_val=[]
+
+    acc_list_train=[]
+    acc_list_test=[]
+    acc_list_val=[]
+    tstart = time.time()
+
+    for epoch in range(1, num_epoch+1):
+        time_start = time.time()
+        train(device, network, optimizer, datagen, epoch, epochsize)
+        train_acc, train_loss,  predictions_train, true_label_train=(0,0,0,0)
+
+        print("Time Taken for epoch:",epoch," ",time.time()-time_start)
+
+        if epoch%5 == 0 or epoch > num_epoch-5:
+            val_acc, val_acc_top3, val_loss, predictions_val, true_label_val = test(device, network,"val",epoch, \
+                                    X_val,\
+                                                                y_val, mask_val)
+            test_acc, test_acc_top3, test_loss, predictions_test, true_label_test = test(device, network,"test",epoch, \
+                                X_test,\
+                                                                y_test, mask_test)
+
+            print("Saved model dict at epoch:",epoch," at path ",save_path)
+            state={
+                'epoch': epoch + 1,
+                'state_dict': network.state_dict(),
+
+                'test_loss':             test_loss,
+                'test_accuracy':         test_acc,
+                'test_predictions':      predictions_test,
+                'test_true_label':       true_label_test,
+
+                'train_loss': train_loss,
+                'train_accuracy': train_acc,
+                'train_predictions':      predictions_train,
+                'train_true_label':       true_label_train,
+
+                'val_loss': val_loss,
+                'val_accuracy': val_acc,
+                'val_predictions':      predictions_val,
+                'val_true_label':       true_label_val,
+
+#                 'optimizer' : optimizer.state_dict(),
+            }
+            fname=save_path+"/models/epoch_"+str(epoch)+"_checkpoint.pth.tar"
+            torch.save(state,fname)
+
+
+            # np.save(save_path+"/predictions_truelabels/epoch_"+str(epoch)+"_prediction_train.npy", predictions_train)
+            np.save(save_path+"/predictions_truelabels/epoch_"+str(epoch)+"_prediction_test.npy", predictions_test)
+            np.save(save_path+"/predictions_truelabels/epoch_"+str(epoch)+"_prediction_val.npy", predictions_val)
+            # np.save(save_path+"/predictions_truelabels/epoch_"+str(epoch)+"_true_label_train.npy", true_label_train)
+            np.save(save_path+"/predictions_truelabels/epoch_"+str(epoch)+"_true_label_test.npy", true_label_test)
+            np.save(save_path+"/predictions_truelabels/epoch_"+str(epoch)+"_true_label_val.npy", true_label_val)
+
+            # loss_list_train.append(train_loss)
+            loss_list_test.append(test_loss)
+            loss_list_val.append(val_loss)
+
+            # acc_list_train.append(train_acc)
+            acc_list_test.append(test_acc)
+            acc_list_val.append(val_acc)
+
+            # np.save(save_path+"/loss_list_train.npy", loss_list_train)
+            np.save(save_path+"/loss_list_test.npy", loss_list_test)
+            np.save(save_path+"/loss_list_val.npy", loss_list_val)
+
+
+            # np.save(save_path+"/acc_list_train.npy", acc_list_train)
+            np.save(save_path+"/acc_list_test.npy", acc_list_test)
+            np.save(save_path+"/acc_list_val.npy", acc_list_val)
+
+    print("Total training time: ",time.time()-tstart)
 
 if __name__ == "__main__":
     main()
-    

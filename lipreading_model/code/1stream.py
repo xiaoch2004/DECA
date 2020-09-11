@@ -29,6 +29,8 @@ def train(device, model, optimizer, datagen, epoch, epochsize):
 
     tloss=0
     for i in range(epochsize):
+        if i == 83:
+            print("test")
         X, y, vid_lens_batch, m, batch_idxs = next(datagen)
         # repeat targets based on max sequence len
         y = y.reshape((-1, 1))

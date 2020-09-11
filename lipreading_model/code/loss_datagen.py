@@ -55,8 +55,6 @@ def temporal_ce_loss(output, target, mask):
     return ce_loss
 
 
-
-
 def gen_lstm_batch_random(X, y, seqlen, batchsize=30, shuffle=True):
     """
     randomized data generator for training data
@@ -224,5 +222,54 @@ def gen_lstm_batch_random_test(X, y, seqlen, batchsize=30, shuffle=True):
         yield X_batch, y_batch,vid_lens_batch, mask, batch_video_idxs
 
 
+def gen_cnn_batch(X, y, batchsize=30, shuffle=True):
+    """
+    randomized data generator for training data
+    creates an infinite loop of mini batches
+    :param X: input
+    :param y: target
+    :param y: lengths of video
+    :param batchsize: number of videos per batch
+    :return: x_train, y_target, input_mask, video idx used
+    """
+    # find the max len of all videos for creating the mask
+    start_video = 0
+    no_videos = len(y)
+    reset = False
+    reset_g=False
 
 
+    # permutate the video sequences for each batch
+    if shuffle:
+        randomized = np.random.permutation(len(y))
+    else:
+        randomized = range(len(y))
+    while True:
+        end_video = start_video + batchsize
+        if end_video >= no_videos:  # all videos iterated, reset
+            batch_video_idxs = randomized[start_video:]
+            # extract all the video lengths of the video idx
+            reset = True
+        else:
+            batch_video_idxs = randomized[start_video:end_video]
+        X_batch = np.zeros((batchsize, 1, 44, 50), dtype=X.dtype)  # returned batch input
+        y_batch = np.zeros((batchsize,), dtype='uint8')
+
+        X_batch = X[batch_video_idxs]
+        y_batch = y[batch_video_idxs]
+
+
+
+        if reset:
+            # permutate the new video sequences for each batch
+            if shuffle:
+                randomized = np.random.permutation(len(y))
+            else:
+                randomized = range(len(y))
+            start_video = 0
+            reset = False
+        else:
+            start_video = end_video
+
+
+        yield X_batch, y_batch, X.shape[1]*np.ones(batchsize), np.ones((batchsize, X.shape[1])), batch_video_idxs

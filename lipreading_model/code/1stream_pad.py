@@ -26,6 +26,8 @@ from loss_datagen import *
 def train(device, model, optimizer, datagen, epoch, epochsize):
 
     model.train()
+    if epoch == 10:
+        print('pause')
 
     tloss=0
     for i in range(epochsize):
@@ -234,7 +236,7 @@ def main():
     matlab_target_offset= True
 
     #[training]
-    learning_rate= 0.0003
+    learning_rate= 0.001
 #     num_epoch= 40
     num_epoch=args.num_epoch
     epochsize= 105*2
