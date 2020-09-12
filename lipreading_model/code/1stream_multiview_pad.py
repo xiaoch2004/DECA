@@ -299,7 +299,8 @@ def main():
     device = torch.device(device_name)
 
 
-    shape= [2000,1000,500,50]
+    #shape= [2000,1000,500,50]
+    shape = [1024, 1024, 1024, 50]
     nonlinearities= ["rectify","rectify","rectify","linear"]
     # preprocessing options
     reorderdata= False
@@ -309,7 +310,7 @@ def main():
     featurewisenormalize= False
 
     # CNN channels
-    channels = [32, 48, 64]
+    channels = [32, 64, 96]
 
     # [lstm_classifier]
     windowsize= 3
@@ -406,10 +407,12 @@ def main():
 
     input_dimensions = 44*50
 
-    network=deltanet_majority_vote(device, pretrained_encoder_isTrue, \
-                pre_trained_encoder_variables, shape, nonlinearities, input_dimensions, windowsize, lstm_size, args.num_classes, channels=channels, cnn_encode=cnn_encode)
+    #network=deltanet_majority_vote(device, pretrained_encoder_isTrue, \
+    #            pre_trained_encoder_variables, shape, nonlinearities, input_dimensions, windowsize, lstm_size, args.num_classes, channels=channels, cnn_encode=cnn_encode)
 
     # network = LipNet(dropout_p=0.5)
+
+    network = cnn_dnn_delta_net(device, shape, nonlinearities, 2200, windowsize, lstm_size, args.num_classes, cnn_channels=channels)
 
     network.to(device)
 
@@ -444,7 +447,6 @@ def main():
     train_X, train_y, train_vidlens, train_subjects, \
     val_X, val_y, val_vidlens, val_subjects ,_,_,_,_ \
      = split_seq_data(train_data_matrix, train_targets_vec, train_subjects_vec, train_vidlen_vec, train_subject_ids, val_subject_ids, test_subject_ids, delete_categories=delete_categories)
-
 
     _,_,_,_,_,_,_,_, \
     test_X, test_y, test_vidlens, test_subjects =split_seq_data(test_data_matrix, test_targets_vec, test_subjects_vec, test_vidlen_vec, train_subject_ids, val_subject_ids, test_subject_ids, delete_categories=delete_categories)

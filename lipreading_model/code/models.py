@@ -107,8 +107,9 @@ def return_non_linearity(s):
     return 0
 
 class custom_encoder(nn.Module):
-    def __init__(self,input_size, shapes, nonlinearities):
+    def __init__(self,input_size, shapes, nonlinearities, residual=False):
         super(custom_encoder, self).__init__()
+        self.residual = residual
         self.layers_list=nn.ModuleList([])
 #         print(input_size, shapes[0])
         self.layers_list.append(nn.Linear(input_size, shapes[0]))
@@ -128,17 +129,26 @@ class custom_encoder(nn.Module):
 #         print(x.is_cuda)
         batch_size=x.shape[0]
         seq_len=x.shape[1]
+        res_flag = 0
         for l in self.layers_list:
+            if self.residual:
+                if l.__dict__['_parameters']['weight'].shape[0] == l.__dict__['_parameters']['weight'].shape[1]:
+                    res_flag = 1
+                    res = x
             x=l(x)
+            if self.residual:
+                if res_flag == 1:
+                    x = x + res
+                    res_flag = 0
         return x
 
 class cnn_encoder(nn.Module):
     def __init__(self, channels, dropout_p=0.5):
         super(cnn_encoder, self).__init__()
-        self.conv1 = nn.Conv3d(1, channels[0], (3, 5, 5), (1, 2, 2), (1, 2, 2))
+        self.conv1 = nn.Conv3d(1, channels[0], (3, 3, 3), (1, 2, 2), (1, 2, 2))
         self.pool1 = nn.MaxPool3d((1, 2, 2), (1, 2, 2))
 
-        self.conv2 = nn.Conv3d(channels[0], channels[1], (3, 5, 5), (1, 1, 1), (1, 2, 2))
+        self.conv2 = nn.Conv3d(channels[0], channels[1], (3, 3, 3), (1, 1, 1), (1, 2, 2))
         self.pool2 = nn.MaxPool3d((1, 2, 2), (1, 2, 2))
 
         self.conv3 = nn.Conv3d(channels[1], channels[2], (3, 3, 3), (1, 1, 1), (1, 1, 1))
@@ -155,15 +165,15 @@ class cnn_encoder(nn.Module):
         x = self.dropout3d(x)
         x = self.pool1(x)
 
-        #x = self.conv2(x)
-        #x = self.relu(x)
-        #x = self.dropout3d(x)
-        #x = self.pool2(x)
+        x = self.conv2(x)
+        x = self.relu(x)
+        x = self.dropout3d(x)
+        x = self.pool2(x)
 
-        #x = self.conv3(x)
-        #x = self.relu(x)
-        #x = self.dropout3d(x)
-        #x = self.pool3(x)
+        x = self.conv3(x)
+        x = self.relu(x)
+        x = self.dropout3d(x)
+        x = self.pool3(x)
 
         # (B, C, T, H, W)->(T, B, C, H, W)
         x = x.permute(2, 0, 1, 3, 4).contiguous()
@@ -852,3 +862,99 @@ class LipNet(torch.nn.Module):
 
 def parameterCount(model):
     return sum(dict((p.data_ptr(), p.numel()) for p in model.parameters()).values())
+
+
+class cnn_dnn_delta_net(nn.Module):
+    def __init__(self, device, dnn_shapes, nonlinearities, dnn_input_size, window, hidden_units, output_classes=10, cnn_channels=[32, 64, 96]):
+        super(cnn_dnn_delta_net, self).__init__()
+
+        self.device=device
+        self.window=window
+        self.input_size=dnn_input_size
+        self.hidden_units=hidden_units
+        self.output_classes=output_classes
+        self.shapes=dnn_shapes
+        self.nonlinearities=nonlinearities
+        self.layer_encoder=custom_encoder(input_size, dnn_shapes,nonlinearities, residual=True)
+        self.layer_cnn_encoder=cnn_encoder(cnn_channels)
+
+        self.layer_delta=delta_layer(self.device,self.window)
+
+        # only blstm implemented
+        self.lstm_input_size = dnn_shapes[-1]
+
+
+        self.layer_blstm=nn.LSTM(
+            input_size=self.lstm_input_size*3,
+            hidden_size=self.hidden_units,
+            num_layers=1,
+            batch_first=True,
+            bidirectional =True,
+        )
+
+        # hidden_units*2 because of 2 direction,   we watn it to do over the last dim softmax    ( not doing here )
+        self.layer_out=nn.Sequential(nn.Linear(self.hidden_units*2,self.output_classes), nn.Softmax(dim=-1))
+        self.conv_res = nn.Linear(dnn_input_size, 576)
+
+
+
+    def init_hidden(self,batch_size,num_layers=1,directions=2):# blstm so 2 direction
+        # h_0=(num_layers * num_directions, batch, hidden_size)
+        #c_0 of shape (num_layers * num_directions, batch, hidden_size)
+
+        h_0 = torch.randn(num_layers*directions, batch_size, self.hidden_units)
+        c_0 = torch.randn(num_layers*directions, batch_size, self.hidden_units)
+
+        h_0 = h_0.to(self.device)
+        c_0 = c_0.to(self.device)
+
+
+        return h_0,c_0
+
+
+    def forward(self, x, x_lengths):
+#         print(x.size())
+#         print(x_lengths)
+        batch_size=x.shape[0]
+        seq_len = x.shape[2]
+
+        h_0,c_0=self.init_hidden(batch_size)
+
+        # x: (10, 1, seqlen, 44, 50)
+        
+        # x1: (10, seqlen, 44, 50)
+        x1 = x.squeeze(1)
+
+        # x1: (10, seqlen, 2200)
+        x1 = x1.permute(0,1,3,2).reshape(10, seq_len, 2200)
+
+        # x1: (10, seqlen, 576)
+        x1 = self.conv_res(x1)
+
+        # x: (10, seqlen, 576)
+        x = self.layer_cnn_encoder(x)
+
+        # residual layer for conv
+        x = x + x1
+
+        x=self.layer_encoder(x)
+
+# Keep unchanged:
+        x=self.layer_delta(x)
+
+        x_lengths_sorted,ordered_idx=x_lengths.sort(0, descending=True)
+
+        if self.cnn_encode:
+            x = x.permute(1,0,2).contiguous()
+
+        x=torch.index_select(x,0,ordered_idx)
+
+        X = torch.nn.utils.rnn.pack_padded_sequence(x, x_lengths_sorted, batch_first=True)
+
+        X,(h_n,c_n)=self.layer_blstm(X,(h_0,c_0))
+
+        X, _ = torch.nn.utils.rnn.pad_packed_sequence(X, batch_first=True)
+
+        x=self.layer_out(X)
+#convert label using torch.index_select(y,0,ordered_idx)
+        return x,ordered_idx

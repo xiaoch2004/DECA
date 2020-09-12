@@ -244,5 +244,3 @@ def pad_frame_and_reshape(X, y, vidlens, subjects, size):
         start_new = end_new
         start_x = end_x
     return X_new.reshape(num_videos, max_length, size[0], size[1], order='F'), y_new, int(max_length)*np.ones((len(vidlens),), dtype=int), subjects
-
->>>>>>> 7090c3e1b41c368aef2211fd35e8b286ef13be84
