@@ -26,7 +26,7 @@ from loss_datagen import *
 def train(device, model, optimizer, datagen, epoch, epochsize, cnn_encode=False):
 
     model.train()
-    if epoch == 10:
+    if epoch == 5:
         print('pause')
 
     tloss=0
@@ -263,7 +263,7 @@ def main():
             string += (","+ str(train_views[i]))
 
     if cnn_encode:
-        save_path = args.save_path + "/cnn_train_view_" + string
+        save_path = args.save_path + "/cnn_dnn_train_view_" + string
     else:
         if view == -1:
             save_path=args.save_path+"/train_view_"+string
@@ -299,8 +299,8 @@ def main():
     device = torch.device(device_name)
 
 
-    #shape= [2000,1000,500,50]
-    shape = [1024, 1024, 1024, 50]
+    shape= [2000,1000,500,50]
+    #shape = [1024, 1024, 1024, 50]
     nonlinearities= ["rectify","rectify","rectify","linear"]
     # preprocessing options
     reorderdata= False
@@ -315,17 +315,16 @@ def main():
     # [lstm_classifier]
     windowsize= 3
     lstm_size= 450
-    if cnn_encode:
-        lstm_size = int(channels[-1]*6*3)
     output_classes= args.num_classes
 
     matlab_target_offset= True
 
     #[training]
-    learning_rate= 0.0003
+    learning_rate= 0.0001
 #     num_epoch= 40
     num_epoch=args.num_epoch
-    epochsize= 105*2
+    #epochsize= 105*2
+    epochsize = 525
     batchsize= 10
 
     #[testing and val]
@@ -412,7 +411,7 @@ def main():
 
     # network = LipNet(dropout_p=0.5)
 
-    network = cnn_dnn_delta_net(device, shape, nonlinearities, 2200, windowsize, lstm_size, args.num_classes, cnn_channels=channels)
+    network = cnn_dnn_delta_net(device, shape, nonlinearities, 2200, windowsize, lstm_size, args.num_classes, cnn_channels=channels, conv=False)
 
     network.to(device)
 
@@ -514,16 +513,13 @@ def main():
             test_vidlens = cnn_data['test_vidlens']
             test_subject = cnn_data['test_subjects']
 
-        datagen = gen_cnn_batch(train_X, train_y, batchsize=batchsize, shuffle=True)
+        datagen = gen_cnn_batch(train_X, train_y, batchsize=batchsize, shuffle=False)
         test_datagen = gen_cnn_batch(test_X, test_y, batchsize=test_batchsize, shuffle=False)
         val_datagen = gen_cnn_batch(val_X, val_y, batchsize=val_batchsize, shuffle=False)
     else:
         datagen = gen_lstm_batch_random(train_X, train_y, train_vidlens, batchsize=batchsize)
         val_datagen = gen_lstm_batch_random(val_X, val_y, val_vidlens, batchsize=len(val_vidlens), shuffle=False)
         test_datagen = gen_lstm_batch_random(test_X, test_y, test_vidlens, batchsize=len(test_vidlens), shuffle=False)
-        #val_datagen = gen_lstm_batch_random(val_X, val_y, val_vidlens, batchsize=val_batchsize, shuffle=False)
-        #test_datagen = gen_lstm_batch_random(test_X, test_y, test_vidlens, batchsize=test_batchsize, shuffle=False)
-        #train_datagen= gen_lstm_batch_random(train_X, train_y, train_vidlens, batchsize=len(train_vidlens), shuffle=False)
 
         # We'll use this "validation set" to periodically check progress
         X_val, y_val,  vid_lens_batch_val, mask_val, idxs_val = next(val_datagen)

@@ -119,7 +119,6 @@ def gen_lstm_batch_random(X, y, seqlen, batchsize=30, shuffle=True):
         else:
             start_video = end_video
 
-
         yield X_batch, y_batch,vid_lens_batch, mask, batch_video_idxs
 
 

@@ -131,7 +131,7 @@ class custom_encoder(nn.Module):
         seq_len=x.shape[1]
         res_flag = 0
         for l in self.layers_list:
-            if self.residual:
+            if self.residual and type(l)==torch.nn.modules.linear.Linear:
                 if l.__dict__['_parameters']['weight'].shape[0] == l.__dict__['_parameters']['weight'].shape[1]:
                     res_flag = 1
                     res = x
@@ -179,6 +179,7 @@ class cnn_encoder(nn.Module):
         x = x.permute(2, 0, 1, 3, 4).contiguous()
         # (B, C, T, H, W)->(T, B, C*H*W)
         x = x.view(x.size(0), x.size(1), -1)
+        x = x.permute(1,0,2).contiguous()
         return x
 
 
@@ -865,7 +866,7 @@ def parameterCount(model):
 
 
 class cnn_dnn_delta_net(nn.Module):
-    def __init__(self, device, dnn_shapes, nonlinearities, dnn_input_size, window, hidden_units, output_classes=10, cnn_channels=[32, 64, 96]):
+    def __init__(self, device, dnn_shapes, nonlinearities, dnn_input_size, window, hidden_units, output_classes=10, cnn_channels=[32, 64, 96], conv=True):
         super(cnn_dnn_delta_net, self).__init__()
 
         self.device=device
@@ -875,10 +876,12 @@ class cnn_dnn_delta_net(nn.Module):
         self.output_classes=output_classes
         self.shapes=dnn_shapes
         self.nonlinearities=nonlinearities
-        self.layer_encoder=custom_encoder(input_size, dnn_shapes,nonlinearities, residual=True)
+        #self.layer_encoder=custom_encoder(864, dnn_shapes, nonlinearities, residual=False)
+        self.layer_encoder=custom_encoder(2200, dnn_shapes, nonlinearities, residual=False)
         self.layer_cnn_encoder=cnn_encoder(cnn_channels)
 
         self.layer_delta=delta_layer(self.device,self.window)
+        self.isConv = conv
 
         # only blstm implemented
         self.lstm_input_size = dnn_shapes[-1]
@@ -894,7 +897,7 @@ class cnn_dnn_delta_net(nn.Module):
 
         # hidden_units*2 because of 2 direction,   we watn it to do over the last dim softmax    ( not doing here )
         self.layer_out=nn.Sequential(nn.Linear(self.hidden_units*2,self.output_classes), nn.Softmax(dim=-1))
-        self.conv_res = nn.Linear(dnn_input_size, 576)
+        self.conv_res = nn.Linear(dnn_input_size, 864)
 
 
 
@@ -920,32 +923,31 @@ class cnn_dnn_delta_net(nn.Module):
 
         h_0,c_0=self.init_hidden(batch_size)
 
-        # x: (10, 1, seqlen, 44, 50)
-        
-        # x1: (10, seqlen, 44, 50)
-        x1 = x.squeeze(1)
+        # x: (batch_size, 1, seqlen, 44, 50)
 
-        # x1: (10, seqlen, 2200)
-        x1 = x1.permute(0,1,3,2).reshape(10, seq_len, 2200)
+        # x1: (batch_size, seqlen, 44, 50)
+        x1 = x.squeeze(1).clone()
 
-        # x1: (10, seqlen, 576)
-        x1 = self.conv_res(x1)
+        # x1: (batch_size, seqlen, 2200)
+        x1 = x1.permute(0,1,3,2).reshape(batch_size, seq_len, 2200)
 
-        # x: (10, seqlen, 576)
-        x = self.layer_cnn_encoder(x)
+        # x1: (batch_size, seqlen, 864)
+        #x1 = self.conv_res(x1)
 
-        # residual layer for conv
-        x = x + x1
+        # x: (batch_size, seqlen, 864)
+        #if self.isConv:
+        #    x = self.layer_cnn_encoder(x)
+            # residual layer for conv
+        #    x = x + x1
+        #else:
+        #    x = x1
 
-        x=self.layer_encoder(x)
+        x=self.layer_encoder(x1)
 
 # Keep unchanged:
         x=self.layer_delta(x)
 
         x_lengths_sorted,ordered_idx=x_lengths.sort(0, descending=True)
-
-        if self.cnn_encode:
-            x = x.permute(1,0,2).contiguous()
 
         x=torch.index_select(x,0,ordered_idx)
 
